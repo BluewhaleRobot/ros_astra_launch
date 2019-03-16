@@ -1,0 +1,192 @@
+<!-- Entry point for using OpenNI2 devices -->
+<launch>
+
+  <!-- "camera" should uniquely identify the device. All topics are pushed down
+       into the "camera" namespace, and it is prepended to tf frame ids. -->
+  <arg name="rectify" default="true" />
+  <arg name="occupancy_xyz" default="false" />
+  <arg name="points_xyz" default="true" />
+  <arg name="scan_pub" default="true" />
+
+  <arg name="camera" default="kinect" if="$(arg occupancy_xyz)"/>
+  <arg name="camera" default="kinect" unless="$(arg occupancy_xyz)"/>
+
+  <arg name="rgb_frame_id"   default="$(arg camera)_rgb_optical_frame" />
+  <arg name="depth_frame_id" default="$(arg camera)_depth_optical_frame" />
+
+  <arg name="data_skip" default="1" />
+  <!-- device_id can have the following formats:
+         "#n"            : the nth device found, starts from 1
+         "2@n"           : the nth device on USB bus 2, n starts from 1
+         "2bc5/0401@1/6" : uri in format <vendor ID>/<product ID>@<bus number>/<device number>
+         "15120410023"   : serial number -->
+  <arg name="device_id" default="#1" />
+  <arg name="bootorder" default="0" />
+  <arg name="devnums" default="1" />
+
+  <!-- By default, calibrations are stored to file://${ROS_HOME}/camera_info/${NAME}.yaml,
+       where ${NAME} is of the form "[rgb|depth]_[serial#]", e.g. "depth_B00367707227042B".
+       See camera_info_manager docs for calibration URL details. -->
+  <arg name="rgb_camera_info_url"   default="" />
+  <arg name="depth_camera_info_url" default="" />
+
+  <!-- Hardware depth registration -->
+  <arg name="depth_registration" default="false" />
+
+  <!-- Driver parameters -->
+  <arg name="color_depth_synchronization"     default="false" />
+  <arg name="auto_exposure"                   default="true" />
+  <arg name="auto_white_balance"              default="true" />
+
+  <!-- Arguments for remapping all device namespaces -->
+  <arg name="rgb"              default="rgb" />
+  <arg name="ir"               default="ir" />
+  <arg name="depth"            default="depth" />
+
+  <!-- Optionally suppress loading the driver nodelet and/or publishing the default tf
+       tree. Useful if you are playing back recorded raw data from a bag, or are
+       supplying a more accurate tf tree from calibration. -->
+  <arg name="load_driver" default="true" />
+  <arg name="publish_tf" default="true" />
+  <!-- Processing Modules -->
+  <arg name="rgb_processing"                  default="false"  />
+  <arg name="debayer_processing"              default="false" />
+  <arg name="ir_processing"                   default="false" />
+  <arg name="depth_processing"                default="true" />
+  <arg name="depth_registered_processing"     default="false" />
+  <arg name="disparity_processing"            default="false" />
+  <arg name="disparity_registered_processing" default="false" />
+  <arg name="hw_registered_processing"        default="true" if="$(arg depth_registration)" />
+  <arg name="sw_registered_processing"        default="false" if="$(arg depth_registration)" />
+  <arg name="hw_registered_processing"        default="false" unless="$(arg depth_registration)" />
+  <arg name="sw_registered_processing"        default="true" unless="$(arg depth_registration)" />
+
+  <!-- Disable bond topics by default -->
+  <arg name="respawn" default="false" />
+
+  <!-- Worker threads for the nodelet manager -->
+  <arg name="num_worker_threads" default="4" />
+
+  <!-- Push down all topics/nodelets into "camera" namespace -->
+  <group ns="$(arg camera)">
+
+	  <!-- Start nodelet manager -->
+	  <arg name="manager" value="$(arg camera)_nodelet_manager" />
+	  <arg name="debug" default="false" /> <!-- Run manager in GDB? -->
+	  <include file="$(find rgbd_launch)/launch/includes/manager.launch.xml">
+	    <arg name="name" value="$(arg manager)" />
+	    <arg name="debug" value="$(arg debug)" />
+	    <arg name="num_worker_threads"  value="$(arg num_worker_threads)" />
+	  </include>
+
+    <!-- Load driver -->
+    <include if="$(arg load_driver)"
+	     file="$(find astra_launch)/launch/includes/device.launch.xml">
+      <arg name="manager"                         value="$(arg manager)" />
+      <arg name="device_id"                       value="$(arg device_id)" />
+      <arg name="bootorder"                       value="$(arg bootorder)" />
+      <arg name="devnums"                       value="$(arg devnums)" />
+      <arg name="rgb_frame_id"                    value="$(arg rgb_frame_id)" />
+      <arg name="depth_frame_id"                  value="$(arg depth_frame_id)" />
+      <arg name="rgb_camera_info_url"             value="$(arg rgb_camera_info_url)" />
+      <arg name="depth_camera_info_url"           value="$(arg depth_camera_info_url)" />
+      <arg name="rgb"                             value="$(arg rgb)" />
+      <arg name="ir"                              value="$(arg ir)" />
+      <arg name="depth"                           value="$(arg depth)" />
+      <arg name="respawn"                         value="$(arg respawn)" />
+      <arg name="depth_registration"              value="$(arg depth_registration)" />
+      <arg name="color_depth_synchronization"     value="$(arg color_depth_synchronization)" />
+      <arg name="auto_exposure"                   value="$(arg auto_exposure)" />
+      <arg name="auto_white_balance"              value="$(arg auto_white_balance)" />
+      <arg name="data_skip"                       value="$(arg data_skip)" />
+    </include>
+
+    <!-- Load standard constellation of processing nodelets -->
+    <!-- <include file="$(find rgbd_launch)/launch/includes/processing.launch.xml">
+      <arg name="manager"                         value="$(arg manager)" />
+      <arg name="rgb"                             value="$(arg rgb)" />
+      <arg name="ir"                              value="$(arg ir)" />
+      <arg name="depth"                           value="$(arg depth)" />
+      <arg name="respawn"                         value="$(arg respawn)" />
+      <arg name="rgb_processing"                  value="$(arg rgb_processing)" />
+      <arg name="debayer_processing"              value="$(arg debayer_processing)" />
+      <arg name="ir_processing"                   value="$(arg ir_processing)" />
+      <arg name="depth_processing"                value="$(arg depth_processing)" />
+      <arg name="depth_registered_processing"     value="$(arg depth_registered_processing)" />
+      <arg name="disparity_processing"            value="$(arg disparity_processing)" />
+      <arg name="disparity_registered_processing" value="$(arg disparity_registered_processing)" />
+      <arg name="hw_registered_processing"        value="$(arg hw_registered_processing)" />
+      <arg name="sw_registered_processing"        value="$(arg sw_registered_processing)" />
+    </include> -->
+
+    <arg     if="$(arg respawn)" name="bond" value="" />
+    <arg unless="$(arg respawn)" name="bond" value="--no-bond" />
+
+    <!-- Rectified raw image (internal use) -->
+    <node if="$(arg rectify)" pkg="nodelet" type="nodelet" name="$(arg depth)_rectify_depth"
+          args="load image_proc/rectify $(arg manager) $(arg bond)"
+          respawn="$(arg respawn)">
+      <remap from="image_mono"  to="$(arg depth)/image_raw" />
+      <remap from="image_rect"  to="$(arg depth)/image_rect_raw" />
+      <!-- Use nearest neighbor (0) interpolation so we don't streak across
+           depth boundaries -->
+      <param name="interpolation" value="0" />
+    </node>
+
+    <node if="$(arg points_xyz)"
+          pkg="nodelet" type="nodelet" name="$(arg depth)_points"
+          args="load depth_image_proc/point_cloud_xyz_tf $(arg manager) $(arg bond)"
+          respawn="$(arg respawn)">
+      <remap from="image_rect" to="$(arg depth)/image_rect_raw"/>  <!-- Use raw image for efficiency -->
+      <remap from="points"     to="/kinect/depth/points" />
+      <rosparam command="load" file="$(find depth_image_proc)/point_cloud_xyz_tf_astra.yaml"/>
+    </node>
+
+    <!-- XYZ point cloud (optional, disable if publishing XYZRGB instead) -->
+    <node if="$(arg occupancy_xyz)"
+          pkg="nodelet" type="nodelet" name="$(arg depth)_points"
+          args="load depth_image_proc/occupancy_xyz $(arg manager) $(arg bond)"
+          respawn="$(arg respawn)">
+      <remap from="image_rect" to="$(arg depth)/image_rect_raw"/>  <!-- Use raw image for efficiency -->
+      <remap from="points"     to="/kinect/depth/points" />
+      <rosparam command="load" file="$(find depth_image_proc)/occupancy_xyz3.yaml"/>
+    </node>
+
+    <!-- XYZ point cloud (optional, disable if publishing XYZRGB instead) -->
+    <node if="$(arg scan_pub)"
+          pkg="nodelet" type="nodelet" name="astra_scan_node"
+          args="load pointcloud_to_laserscan/pointcloud_to_laserscan_nodelet $(arg manager) $(arg bond)"
+          respawn="$(arg respawn)">
+          <remap from="cloud_in" to="/kinect/depth/points"/>
+          <remap from="scan" to="/astra/scan"/>
+          <rosparam>
+              target_frame: base_link # Leave disabled to output scan in pointcloud frame
+              transform_tolerance: 0.1
+              min_height: 0.1
+              max_height: 1.0
+
+              angle_min: -0.524 # -M_PI/6
+              angle_max: 0.524 # M_PI/6
+              angle_increment: 0.003 # 0.17degree
+              scan_time: 0.1
+              range_min: 0.5
+              range_max: 6
+              use_inf: true
+              inf_epsilon: 1.0
+
+              # Concurrency level, affects number of pointclouds queued for processing and number of threads used
+              # 0 : Detect number of cores
+              # 1 : Single threaded
+              # 2->inf : Parallelism level
+              concurrency_level: 1
+          </rosparam>
+    </node>
+
+  </group> <!-- camera -->
+
+  <!-- Load reasonable defaults for the relative pose between cameras -->
+  <!-- <include file="$(find pointcloud_to_laserscan)/launch/xiaoqiang_astra.launch"/> -->
+
+  <node pkg="tf" type="static_transform_publisher" name="baselink_broadcaster_astra" args="-0.15 0 0.35 -1.5687 0.0124 -1.4739  base_link kinect_depth_optical_frame 20"/>
+
+</launch>
